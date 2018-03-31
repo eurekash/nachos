@@ -131,14 +131,16 @@ public class PriorityScheduler extends Scheduler {
     	}
 
     	public void waitForAccess(KThread thread) {
-    		System.out.println(this.toString() + " waitForAccess " + thread.getName());
-    		print();
+    	//	System.out.println(this.toString() + " waitForAccess " + thread.getName());
+    	//	print();
     		Lib.assertTrue(Machine.interrupt().disabled());
     		ThreadState state = getThreadState(thread);
+    		if (holder == state) 
+    			holder = null;
     		waitQueue.add(state);
     		state.waitForAccess(this);
-    		print();
-    		System.out.println("waitFor Access end.");
+    	//	print();
+    	//	System.out.println("waitFor Access end.");
     	}
 
     	public void acquire(KThread thread) {
@@ -148,8 +150,8 @@ public class PriorityScheduler extends Scheduler {
     	}
 
 		public KThread nextThread() {
-			System.out.println("nextThread");
-			print();
+		//	System.out.println("nextThread");
+		//	print();
 		    Lib.assertTrue(Machine.interrupt().disabled());
 		    // implement me
 		    ThreadState state = pickNextThread();
@@ -198,7 +200,7 @@ public class PriorityScheduler extends Scheduler {
 		    System.out.println("print queue");
 		    for (Iterator<ThreadState> iter = waitQueue.iterator(); iter.hasNext(); ) {
 		    	ThreadState s = iter.next();
-		    	System.out.print("(" + s.thread.getName() + "," + s.priority + ") ");
+		   // 	System.out.print("(" + s.thread.getName() + "," + s.priority + ") ");
 		    }
 		    System.out.println();
 		}
@@ -256,11 +258,12 @@ public class PriorityScheduler extends Scheduler {
 			ThreadState current = this;
 			
 			System.out.println("donate " + current.thread.getName());
+			//System.out.println(current.waitFor.holder.thread.getName());
 			int eff = current.effectivePriority;
 			while (current.waitFor != null) {
 				//System.out.println(current.thread.getName());
 				ThreadState next = ((PriorityQueue) current.waitFor).holder;
-				Lib.assertTrue(next != null);
+				if (next == null)  break;
 				next.updateEffectivePriority(eff);
 				current = next;
 			}
@@ -302,8 +305,9 @@ public class PriorityScheduler extends Scheduler {
 		 */
 		public void waitForAccess(PriorityQueue waitQueue) {
 		    // implement me
-			System.out.println(this.thread.getName() + " waitForAccess " + waitQueue.toString());
+			//System.out.println(this.thread.getName() + " waitForAccess " + waitQueue.toString());
 			this.waitFor = waitQueue;
+			
 			this.donate();
 		}
 	
@@ -318,11 +322,11 @@ public class PriorityScheduler extends Scheduler {
 		 * @see	nachos.threads.ThreadQueue#nextThread
 		 */
 		public void acquire(PriorityQueue waitQueue) {
-			System.out.println("Thread " + this.thread.getName() + " acquire (" + waitQueue.toString() + ")");
+			//System.out.println("Thread " + this.thread.getName() + " acquire (" + waitQueue.toString() + ")");
 		    // implement me
 			this.waitFor = null;
 			waitQueue.holder = this;
-			System.out.println("Change holder " + this.thread.getName());
+			//System.out.println("Change holder " + this.thread.getName());
 			waitQueue.donate();
 		}	
 	
