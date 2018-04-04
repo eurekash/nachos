@@ -191,8 +191,12 @@ public class KThread{
 	Lib.assertTrue(toBeDestroyed == null);
 	toBeDestroyed = currentThread;
 
-	if (currentThread.callJoin != null)
-		currentThread.callJoin.ready();
+	//if (currentThread.callJoin != null)
+	//	currentThread.callJoin.ready();
+	KThread temp;
+	while ((temp = currentThread.joinCallers.nextThread()) != null) {
+		temp.ready();
+	}
 	
 	currentThread.status = statusFinished;
 	
@@ -287,6 +291,8 @@ public class KThread{
 	if (status != statusFinished)
 	{
 		callJoin = currentThread;
+		joinCallers.acquire(this);
+		joinCallers.waitForAccess(currentThread);
 		KThread.sleep();
 	}
 	Machine.interrupt().restore(intStatus);
@@ -463,4 +469,6 @@ public class KThread{
     private static KThread idleThread = null;
     //private static ThreadQueue callJoin = ThreadedKernel.scheduler.newThreadQueue(false);
     private KThread callJoin = null;
+    
+    private ThreadQueue joinCallers = ThreadedKernel.scheduler.newThreadQueue(true);
 }
