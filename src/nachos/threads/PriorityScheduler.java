@@ -137,8 +137,11 @@ public class PriorityScheduler extends Scheduler {
     		ThreadState state = getThreadState(thread);
     		if (holder == state)    //special case for ready queue
     			holder = null;
-    		waitQueue.add(state);
-    		state.waitForAccess(this);
+    		if (!waitQueue.contains(state))
+    		{
+    			waitQueue.add(state);
+    			state.waitForAccess(this);
+    		}
     	//	print();
     	//	System.out.println("waitFor Access end.");
     	}
