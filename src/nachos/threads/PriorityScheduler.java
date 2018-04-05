@@ -135,8 +135,8 @@ public class PriorityScheduler extends Scheduler {
     	//	print();
     		Lib.assertTrue(Machine.interrupt().disabled());
     		ThreadState state = getThreadState(thread);
-    		if (holder == state)    //special case for ready queue
-    			holder = null;
+    		//if (holder == state)    //special case for ready queue
+    		//	holder = null;
     		if (!waitQueue.contains(state))
     		{
     			waitQueue.add(state);
@@ -257,7 +257,7 @@ public class PriorityScheduler extends Scheduler {
 			
 			//System.out.println(current.waitFor.holder.thread.getName());
 			int eff = current.effectivePriority;
-			while (current.waitFor != null) {
+			while (current.waitFor != null && current.waitFor.transferPriority) {
 				//System.out.println(current.thread.getName());
 				ThreadState next = ((PriorityQueue) current.waitFor).holder;
 				if (next == null)  break;
