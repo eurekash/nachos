@@ -276,7 +276,7 @@ public class PriorityScheduler extends Scheduler {
 	
 		protected void donate() {
 			ThreadState current = this;
-			
+			current.update();
 			while (current.waitFor != null && current.waitFor.transferPriority) {
 				current.waitFor.donate();
 				ThreadState next = current.waitFor.holder;
