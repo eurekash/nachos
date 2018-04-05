@@ -148,6 +148,10 @@ public class PriorityScheduler extends Scheduler {
 
     	public void acquire(KThread thread) {
 			Lib.assertTrue(Machine.interrupt().disabled());
+			if (holder != null) {
+				holder.release(this);
+				holder = null;
+			}
 			getThreadState(thread).acquire(this);
     	}
 
@@ -156,6 +160,10 @@ public class PriorityScheduler extends Scheduler {
 		//	print();
 		    Lib.assertTrue(Machine.interrupt().disabled());
 		    // implement me
+		    
+		    if (this.holder != null) {
+		    	this.holder.release(this);
+		    }
 		    ThreadState state = pickNextThread();
 		    if (state == null)  return null;
 		    waitQueue.remove(state);
@@ -165,9 +173,13 @@ public class PriorityScheduler extends Scheduler {
 		
 		protected void donate() {
 			Lib.assertTrue(this.holder != null);
-			this.holder.resetEffectivePriority();
+			//this.holder.resetEffectivePriority();
+			this.effectivePriority = -1;
 			for (ThreadState current: waitQueue ) {
-				this.holder.updateEffectivePriority(current.getEffectivePriority());
+				int temp = current.getEffectivePriority();
+				if (this.effectivePriority < temp)
+					this.effectivePriority = temp;
+				//this.holder.updateEffectivePriority(current.getEffectivePriority());
 			}
 		}
 		
@@ -210,6 +222,7 @@ public class PriorityScheduler extends Scheduler {
 		public boolean transferPriority;
 		
 		protected ThreadState holder = null;
+		protected int effectivePriority = -1;
 		private LinkedList<ThreadState> waitQueue = new LinkedList<ThreadState>();
     }
 
@@ -255,14 +268,29 @@ public class PriorityScheduler extends Scheduler {
 		protected void donate() {
 			ThreadState current = this;
 			
-			//System.out.println(current.waitFor.holder.thread.getName());
-			int eff = current.effectivePriority;
 			while (current.waitFor != null && current.waitFor.transferPriority) {
-				//System.out.println(current.thread.getName());
-				ThreadState next = ((PriorityQueue) current.waitFor).holder;
-				if (next == null)  break;
-				next.updateEffectivePriority(eff);
+				current.waitFor.donate();
+				ThreadState next = current.waitFor.holder;
+				next.update();
 				current = next;
+			}
+			//System.out.println(current.waitFor.holder.thread.getName());
+			//int eff = current.effectivePriority;
+			//while (current.waitFor != null && current.waitFor.transferPriority) {
+			//	//System.out.println(current.thread.getName());
+			//	ThreadState next = ((PriorityQueue) current.waitFor).holder;
+			//	if (next == null)  break;
+			//	next.updateEffectivePriority(eff);
+			//	current = next;
+			//}
+			
+		}
+		
+		protected void update() {
+			this.effectivePriority = this.priority;
+			for (PriorityQueue res: this.holdResource) {
+				if (this.effectivePriority < res.effectivePriority)
+					this.effectivePriority = res.effectivePriority;
 			}
 		}
 		/**
@@ -302,10 +330,10 @@ public class PriorityScheduler extends Scheduler {
 		 */
 		public void waitForAccess(PriorityQueue waitQueue) {
 		    // implement me
-			//System.out.println(this.thread.getName() + " waitForAccess " + waitQueue.toString());
 			this.waitFor = waitQueue;
-			if (waitQueue.transferPriority)
-				this.donate();
+			if (!waitQueue.waitQueue.contains(this))
+    			waitQueue.waitQueue.add(this);
+			this.donate();
 		}
 	
 		/**
@@ -323,13 +351,15 @@ public class PriorityScheduler extends Scheduler {
 		    // implement me
 			this.waitFor = null;
 			waitQueue.holder = this;
+			this.holdResource.add(waitQueue);
 			//System.out.println("Change holder " + this.thread.getName());
-			if (waitQueue.transferPriority)
-			{
-				waitQueue.donate();
-				this.donate();
-			}
+			this.donate();
 		}	
+		
+		public void release(PriorityQueue waitQueue) {
+			this.holdResource.remove(waitQueue);
+			this.donate();
+		}
 	
 		/** The thread with which this object is associated. */	   
 		protected KThread thread;
@@ -337,5 +367,10 @@ public class PriorityScheduler extends Scheduler {
 		protected int priority;
 		protected int effectivePriority;	
 		protected PriorityQueue waitFor = null;
+		protected LinkedList<PriorityQueue> holdResource = new LinkedList<PriorityQueue>();
+    }
+    
+    public static void selfTest() {
+    	
     }
 }
