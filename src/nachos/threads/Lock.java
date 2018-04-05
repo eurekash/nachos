@@ -64,6 +64,12 @@ public class Lock {
 	Machine.interrupt().restore(intStatus);
     }
 
+    public void waitList(String name) {
+    	System.out.println("Lock " + name);
+    	boolean intStatus = Machine.interrupt().disable();
+    	waitQueue.print();
+    	Machine.interrupt().restore(intStatus);
+    }
     /**
      * Test if the current thread holds this lock.
      *

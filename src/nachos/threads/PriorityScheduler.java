@@ -69,7 +69,6 @@ public class PriorityScheduler extends Scheduler {
 
     public boolean increasePriority() {
 	boolean intStatus = Machine.interrupt().disable();
-		       
 	KThread thread = KThread.currentThread();
 
 	int priority = getPriority(thread);
@@ -137,11 +136,9 @@ public class PriorityScheduler extends Scheduler {
     		ThreadState state = getThreadState(thread);
     		//if (holder == state)    //special case for ready queue
     		//	holder = null;
-    		if (!waitQueue.contains(state))
-    		{
-    			waitQueue.add(state);
-    			state.waitForAccess(this);
-    		}
+    		state.waitForAccess(this);
+    	//	System.out.println("acquire()");
+		//	print();
     	//	print();
     	//	System.out.println("waitFor Access end.");
     	}
@@ -153,6 +150,8 @@ public class PriorityScheduler extends Scheduler {
 				holder = null;
 			}
 			getThreadState(thread).acquire(this);
+		//	System.out.println("acquire()");
+		//	print();
     	}
 
 		public KThread nextThread() {
@@ -168,6 +167,8 @@ public class PriorityScheduler extends Scheduler {
 		    if (state == null)  return null;
 		    waitQueue.remove(state);
 		    state.acquire(this);
+		   // System.out.println("nextThread()");
+		   // print();
 		   	return state.thread;
 		}
 		
@@ -209,6 +210,14 @@ public class PriorityScheduler extends Scheduler {
 		    Lib.assertTrue(Machine.interrupt().disabled());
 		    
 		    // implement me (if you want)
+		    if (holder != null) {
+		    	System.out.println("queue holder = " + holder.thread.toString() + "(" + holder.priority + "," + holder.effectivePriority + ")");
+		    }
+		    System.out.println("------------------begin------------------");
+		    for (ThreadState ts: waitQueue) {
+		    	System.out.println(ts.thread.toString() + "(" + ts.priority + "," + ts.effectivePriority + ")");
+		    }
+		    System.out.println("------------------end------------------");
 		}
 		
 		public void setHolder(KThread th) {
@@ -304,18 +313,10 @@ public class PriorityScheduler extends Scheduler {
 		    
 		    this.priority = priority;
 		    this.effectivePriority = priority;
-		    
 		    // implement me
+		    this.donate();
 		}
-	
-		public void resetEffectivePriority() {
-			effectivePriority = priority;
-		}
-		
-		public void updateEffectivePriority(int eff) {
-			if (effectivePriority < eff)
-				effectivePriority = eff;
-		}
+
 		/**
 		 * Called when <tt>waitForAccess(thread)</tt> (where <tt>thread</tt> is
 		 * the associated thread) is invoked on the specified priority queue.
@@ -370,7 +371,104 @@ public class PriorityScheduler extends Scheduler {
 		protected LinkedList<PriorityQueue> holdResource = new LinkedList<PriorityQueue>();
     }
     
+    
+    private static class T1 implements Runnable {
+    	Lock lock;
+    	int id;
+    	T1(Lock l, int id) {
+    		lock = l;
+    		this.id = id;
+    	}
+    	public void run() {
+    		//KThread.yield();
+    		lock.acquire();
+    		boolean intStatus = Machine.interrupt().disable();
+    		ThreadedKernel.scheduler.setPriority(1);
+    		Machine.interrupt().restore(intStatus);
+    		for (int i = 0; i < 1000; i++)
+    			KThread.yield();
+    		lock.waitList("lock1");
+    		lock.release();
+    	}
+    }
+    
+    private static class T2 implements Runnable {
+    	Lock lock1, lock2;
+    	int id;
+    	int reset;
+    	T2(Lock l1,Lock l2, int id, int reset) {
+    		lock1 = l1;
+    		lock2 = l2;
+    		this.id = id;
+    		this.reset = reset;
+    	}
+    	public void run() {
+    		lock2.waitList("lock2");
+    		boolean intStatus = Machine.interrupt().disable();
+    		ThreadedKernel.scheduler.setPriority(reset);
+    		Machine.interrupt().restore(intStatus);
+    		lock2.acquire();
+    		
+    		KThread.yield();
+    		lock1.acquire();
+    		KThread.yield();
+    		lock1.waitList("lock1");
+    		lock1.release();
+    		lock2.waitList("lock2");
+    		lock2.release();
+    	}
+    }
+  
+    
+    private static class Thread2 implements Runnable {
+    	Lock lock;
+    	int id;
+    	Thread2(Lock l, int id) {
+    		lock = l;
+    		this.id = id;
+    	}
+    	public void run() {
+    		System.out.println("type2 " + id + " acquiring lock1");
+    		lock.acquire();
+    		lock.waitList("lock1");
+    		KThread.yield();
+    		System.out.println("type2 " + id + " acquire lock.");
+    		System.out.println("type2 " + id + " releasing lock1");
+    		lock.release();
+    	}
+    }
+    
     public static void selfTest() {
+    	Lock lock1 = new Lock();
+    	Lock lock2 = new Lock();
+
     	
+  
+    	KThread t1, t2, t3, t4;
+    	boolean intStatus;
+    	intStatus = Machine.interrupt().disable();
+    	
+    	t1 = new KThread(new T1(lock1,1)).setName("t1");
+    	ThreadedKernel.scheduler.setPriority(t1,7);
+    	
+    	t2 = new KThread(new T1(lock1,2)).setName("t2");
+    	ThreadedKernel.scheduler.setPriority(t2,4);
+    
+    	t3 = new KThread(new T2(lock1,lock2,3,1)).setName("t3");
+    	ThreadedKernel.scheduler.setPriority(t3,6);
+  
+    	t4 = new KThread(new T2(lock1,lock2,4,5)).setName("t4");
+    	ThreadedKernel.scheduler.setPriority(t4,4);
+    	
+    	Machine.interrupt().restore(intStatus);
+    	t1.fork();
+    	t2.fork();
+    	t3.fork();
+    	t4.fork();
+
+    	t1.join();
+    	t2.join();
+    	t3.join();
+    	t4.join();
     }
 }
