@@ -6,109 +6,26 @@ public class Boat
 {
     static BoatGrader bg;
     
-    private static class Island {
-    	int numChildren;
-    	int numAdults;
-    	boolean boat;
-    	Lock lock;
-    	Condition2 adult, waitOnLand, waitOnBoat;
-    	int numWaitForBoat = 0;
-    	public Island(int numChildren, int numAdults, boolean boat) {
-    		this.numChildren = numChildren;
-    		this.numAdults = numAdults;
-    		this.boat = boat;
-    		this.lock = new Lock();
-    		adult = new Condition2(this.lock);
-    		waitOnLand = new Condition2(this.lock);
-    		waitOnBoat = new Condition2(this.lock);
-    	}
-    	
-    	public void acquire() {
-    		lock.acquire();
-    	}
-    	
-    	public void release() {
-    		lock.release();
-    	}
-    	
-    	public void childWaitOnLand() {
-    		waitOnLand.sleep();
-    	}
-    	
-    	public void notifyChildOnLand() {
-    		waitOnLand.wake();
-    	}
-    	
-    	public void childRide() {
-    		Lib.assertTrue(numWaitForBoat == 0);
-    		numWaitForBoat ++;
-    		notifyChildOnLand();
-    		waitOnBoat.sleep();
-    	}
-    	
-    	public void childRow() {
-    		Lib.assertTrue(numWaitForBoat < 2);
-    		numWaitForBoat ++;
-    		waitOnBoat.wake();
-    	}
-    	
-    	public void adultWait() {
-    		adult.sleep();
-    	}
-    	
-    	public void notifyAdult() {
-    		adult.wake();
-    	}
-    	
-    	public int getNumOfChildren() {
-    		return numChildren;
-    	}
-    	
-    	public int getNumOfAdults() {
-    		return numAdults;
-    	}
-    	
-    	public void childrenLeave() {
-    		Lib.assertTrue(numChildren >= numWaitForBoat && boat);
-    		numChildren -= numWaitForBoat;
-    		numWaitForBoat = 0;
-    		boat = false;
-    	}
-    	
-    	public void childrenArrive(int add) {
-    		Lib.assertTrue(boat == false);
-    		numChildren += add;
-    		boat = true;
-    	}
-    	
-    	public void adultLeave() {
-    		Lib.assertTrue(numAdults > 0 && boat);
-    		numAdults --;
-    		boat = false;
-    	}
-    	
-    	public void adultArrive() {
-    		Lib.assertTrue(!boat);
-    		numAdults ++;
-    		boat = true;
-    	}
-    	
-    	public boolean isBoatHere() {
-    		return boat;
-    	}
-    	
-    	public void reverse() {
-    		boat = !boat;
-    	}
-    	
-    	public int getNumOfChildrenWaitForBoat() {
-    		return this.numWaitForBoat;
-    	}
-    }
+    private static int nChildrenOnOahu;
+    private static int nChildrenOnMolokai;
+    private static int nAdultsOnOahu;
+    private static int nAdultsOnMolokai;
+    private static int numWaitForBoat = 0;
     
-    private static Island oahu = null, molokai = null;
-    private static boolean OAHU = false;
-    private static boolean MOLOKAI = true;
+    private static Lock lockOahu = new Lock();
+    private static Lock lockMolokai = new Lock();
+    private static Condition2 oahuAdults = new Condition2(lockOahu);
+    private static Condition2 oahuWaitOnLand = new Condition2(lockOahu);
+    private static Condition2 oahuWaitOnBoat = new Condition2(lockOahu);
+    private static Condition2 molokaiAdults = new Condition2(lockMolokai);
+    private static Condition2 molokaiWaitOnLand = new Condition2(lockMolokai);
+    private static Condition2 molokaiWaitOnBoat = new Condition2(lockMolokai);
+    
+    private static final boolean OAHU = true;
+    private static final boolean MOLOKAI = false;
+    private static boolean boat = OAHU;
+    
+   
     private static Semaphore finish = new Semaphore(0);
    // private static int numWaitForBoatOahu = 0;   //number of children waiting on 
     
@@ -116,14 +33,14 @@ public class Boat
     {
 	BoatGrader b = new BoatGrader();
 	
-	System.out.println("\n ***Testing Boats with only 2 children***");
-	begin(0, 2, b);
+	//sSystem.out.println("\n ***Testing Boats with only 2 children***");
+	//begin(0, 2, b);
 
-//	System.out.println("\n ***Testing Boats with 2 children, 1 adult***");
-//  	begin(1, 2, b);
+	//System.out.println("\n ***Testing Boats with 2 children, 1 adult***");
+  	begin(1, 2, b);
 
-//  	System.out.println("\n ***Testing Boats with 3 children, 3 adults***");
-//  	begin(3, 3, b);
+  	//System.out.println("\n ***Testing Boats with 3 children, 3 adults***");
+  	begin(0, 5, b);
     }
 
     public static void begin( int adults, int children, BoatGrader b )
@@ -145,17 +62,21 @@ public class Boat
 //        KThread t = new KThread(r);
 //        t.setName("Sample Boat Thread");
 //        t.fork();
-	
-		oahu = new Island(adults, children, true);
-		molokai = new Island(0, 0, false);
-
+		
+		nAdultsOnOahu = adults;
+		nChildrenOnOahu = children;
+		nAdultsOnMolokai = 0;
+		nChildrenOnMolokai = 0;
+		
+		KThread[] threadAdults = new KThread[adults];
+		KThread[] threadChildren = new KThread[children];
 		for (int i = 0; i < adults; i ++) {
 			Runnable r = new Runnable() {
 				public void run() {
 					AdultItinerary();
 				}
 			};
-			new KThread(r).setName("Adult(" + i + ")").fork();
+			(threadAdults[i] = new KThread(r).setName("Adult(" + i + ")")).fork();
 		}
 		
 		for (int i = 0; i < children; i ++) {
@@ -164,10 +85,11 @@ public class Boat
 					ChildItinerary();
 				}
 			};
-			new KThread(r).setName("Child(" + i + ")").fork();
+			(threadChildren[i] = new KThread(r).setName("Child(" + i + ")")).fork();
 		}
 		
 		finish.P();
+		
     }
 
     static void AdultItinerary()
@@ -181,17 +103,20 @@ public class Boat
 	       bg.AdultRowToMolokai();
 	   indicates that an adult has rowed the boat across to Molokai
 	*/
-		oahu.acquire();
-		while (oahu.getNumOfChildren() > 1 || oahu.isBoatHere() == false)
-			oahu.adultWait();
-		oahu.adultLeave();
-		oahu.release();
+		lockOahu.acquire();
+		while (nChildrenOnOahu > 1 || boat == MOLOKAI)
+			oahuAdults.sleep();
+			//oahu.adultWait();
 		bg.AdultRowToMolokai();
+		nAdultsOnOahu --;
+		boat = MOLOKAI;
+		lockOahu.release();
 		//let a child to pilot the boat back
-		molokai.acquire();
-		molokai.adultArrive();
-		molokai.notifyChildOnLand();
-		molokai.release();
+		lockMolokai.acquire();
+		
+		nAdultsOnMolokai ++;
+		molokaiWaitOnLand.wake();
+		lockMolokai.release();
 		//wake a child on Molokai
     }
 
@@ -199,46 +124,64 @@ public class Boat
     {
     	bg.initializeChild(); //Required for autograder interface. Must be the first thing called.
     	//DO NOT PUT ANYTHING ABOVE THIS LINE. 
-    	while (oahu.getNumOfAdults() + oahu.getNumOfChildren() > 1) {
-	    	oahu.acquire();
-	    	if (oahu.getNumOfChildren() == 1) {
-	    		oahu.notifyAdult();
-	    	} 
-	    	while (oahu.getNumOfChildrenWaitForBoat() >= 2 || oahu.isBoatHere() == false) {
-	    		oahu.childWaitOnLand();
+    	while (nAdultsOnOahu + nChildrenOnOahu > 1) {
+	    	lockOahu.acquire();
+	    	//System.out.println(oahu.getNumOfChildren());
+	    	if (nChildrenOnOahu == 1) {
+	    		oahuAdults.wake();
+	    		oahuWaitOnLand.sleep();
 	    	}
-	    	if (oahu.getNumOfChildrenWaitForBoat() == 0) { //become rider
-	    		bg.ChildRideToMolokai();
-	    		oahu.childRide();
-	    		oahu.release();
-	    		molokai.acquire();
-	    		molokai.childWaitOnLand();
-	    	} else { 	//rower
+	    	while (numWaitForBoat >= 2 || boat == MOLOKAI)
+	    		oahuWaitOnLand.sleep();
+	    	//while (oahu.getNumOfChildrenWaitForBoat() >= 2 || oahu.isBoatHere() == false) {
+	    	//	oahu.childWaitOnLand();
+	    	//}
+	    	
+	    	if (numWaitForBoat == 0) {
+	    		numWaitForBoat ++;
 	    		bg.ChildRowToMolokai();
-	    		oahu.childRow();
-	    		oahu.childrenLeave();
-	    		oahu.release();
-	    		molokai.acquire();
-	    		molokai.childrenArrive(2);
+	    		oahuWaitOnLand.wake();
+	    		oahuWaitOnBoat.sleep();
+	    		lockOahu.release();
+	    		lockMolokai.acquire();
+	    		//bg.ChildRideToMolokai();
+	    		//nChildrenOnMolokai ++;
+	    		molokaiWaitOnLand.sleep();
+	    	} else {
+	    		numWaitForBoat ++;
+	    		oahuWaitOnBoat.wake();
+	    		bg.ChildRideToMolokai();
+	    		nChildrenOnOahu -= numWaitForBoat;
+	    		numWaitForBoat = 0;
+	    		boat = MOLOKAI;
+	    		lockOahu.release();
+	    		lockMolokai.acquire();
+	    		nChildrenOnMolokai += 2;
+	    		
 	    	}
-	    	molokai.childRow();
-    		molokai.childrenLeave();
-    		bg.ChildRowToOahu();
-    		molokai.release();
-    		oahu.acquire();
-    		oahu.childrenArrive(1);
-    		oahu.release();
+	    	nChildrenOnMolokai --;
+	    	
+	    	lockMolokai.release();
+	    	lockOahu.acquire();
+	    	bg.ChildRowToOahu();
+	    	boat = OAHU;
+	    	nChildrenOnOahu ++;
+	    	lockOahu.release();
+	    	
     	}
-    	oahu.acquire();
-    	bg.ChildRowToMolokai();
-    	oahu.childRide();
-    	oahu.childrenLeave();
-    	oahu.release();
-    	molokai.acquire();
-    	molokai.childrenArrive(1);
-    	molokai.release();
-    	System.out.println("Island Oahu: #Children = " + oahu.getNumOfChildren() + ", #Adults = " + oahu.getNumOfAdults());
-    	System.out.println("Island Molokai: #Children = " + molokai.getNumOfChildren() + ", #Adults = " + molokai.getNumOfAdults());
+    	if (nChildrenOnOahu > 0) {
+    		lockOahu.acquire();
+    		bg.ChildRowToMolokai();
+    		nChildrenOnOahu --;
+    		lockOahu.release();
+    		lockMolokai.acquire();
+    		nChildrenOnMolokai++;
+    		boat = MOLOKAI;
+    		lockMolokai.release();
+ 
+    	}
+    	System.out.println("Island Oahu: #Children = " + nChildrenOnOahu + ", #Adults = " + nAdultsOnOahu);
+    	System.out.println("Island Molokai: #Children = " + nChildrenOnMolokai + ", #Adults = " + nAdultsOnMolokai);
     	finish.V();
     }
 
